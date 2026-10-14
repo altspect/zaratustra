@@ -34,6 +34,9 @@ for filename in sorted(os.listdir(folder_path)):
 print(f"Length of the combined text: {len(text):,} characters")
 
 # Find all unique characters that occur in this text
+# set is going to create a list of all unique chars
+# list is going to change set which doesn't have order to list that has order (from {a, b, c, d} to [a, b, c, d])
+# sorted is going to sort it alphabeticaly
 chars = sorted(list(set(text)))
 vocab_size = len(chars)
 
@@ -41,14 +44,20 @@ print(f"Vocabulary ready. Unique characters (vocab_size): {vocab_size}")
 print(f"Vocabulary: {''.join(chars)}\n")
 
 # Create a mapping from characters to integers, and vice versa
+# enumerate is going to create an index for every element of the input [(0, ' '), (1, 'a'), (2, 'b'), (3, 'c'), ...]
+# This is pretty much straightforward - first you create an object with character as a key and iterator as a value, and then other way around
+# This will produce something like {'a': 1, 'b', 2, 'c': 3}
 stoi = {ch: i for i, ch in enumerate(chars)}
+# This will produce something like {1: 'a', 2: 'b', 3: 'c'}
 itos = {i: ch for i, ch in enumerate(chars)}
 
 # Encoder: takes a string, outputs a list of integers
+# Will produce something like ala -> [1, 8, 1]
 def encode(s):
     return [stoi[c] for c in s]
 
 # Decoder: takes a list of integers, outputs a string
+# Will produce something like [1, 8, 1] -> ala
 def decode(l):
     return ''.join([itos[i] for i in l])
 
@@ -58,6 +67,7 @@ def decode(l):
 # ==========================================
 
 # Encode the entire text dataset and store it in a PyTorch Tensor
+# Will produce something like tensor([58, 1, 50, 1, 56, 59, ...])
 data = torch.tensor(encode(text), dtype=torch.long)
 
 # Split up the data into train and validation sets
@@ -82,77 +92,77 @@ def get_batch(split):
     return x, y
 
 
-# ==========================================
-# PART 3: BIGRAM LANGUAGE MODEL
-# ==========================================
+# # ==========================================
+# # PART 3: BIGRAM LANGUAGE MODEL
+# # ==========================================
 
-class BigramLanguageModel(nn.Module):
-    def __init__(self, vocab_size):
-        super().__init__()
-        # Lookup table reading logits for the next token directly
-        self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
+# class BigramLanguageModel(nn.Module):
+#     def __init__(self, vocab_size):
+#         super().__init__()
+#         # Lookup table reading logits for the next token directly
+#         self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
 
-    def forward(self, idx, targets=None):
-        # idx and targets are both (B, T) tensor of integers
-        # B = Batch Size (4), T = Time/Block Size (8), C = Vocab Size (e.g., 65)
+#     def forward(self, idx, targets=None):
+#         # idx and targets are both (B, T) tensor of integers
+#         # B = Batch Size (4), T = Time/Block Size (8), C = Vocab Size (e.g., 65)
         
-        logits = self.token_embedding_table(idx) # Shape: (B, T, C)
+#         logits = self.token_embedding_table(idx) # Shape: (B, T, C)
         
-        if targets is None:
-            loss = None
-        else:
-            # PyTorch expects dimensions to be (Batch * Time, Channels) for cross_entropy
-            B, T, C = logits.shape
-            logits = logits.view(B*T, C)
-            targets = targets.view(B*T)
+#         if targets is None:
+#             loss = None
+#         else:
+#             # PyTorch expects dimensions to be (Batch * Time, Channels) for cross_entropy
+#             B, T, C = logits.shape
+#             logits = logits.view(B*T, C)
+#             targets = targets.view(B*T)
             
-            # Calculate cross-entropy loss (how wrong the predictions are)
-            loss = F.cross_entropy(logits, targets)
+#             # Calculate cross-entropy loss (how wrong the predictions are)
+#             loss = F.cross_entropy(logits, targets)
             
-        return logits, loss
+#         return logits, loss
         
-    def generate(self, idx, max_new_tokens):
-        # idx is (B, T) array of indices in the current context
-        for _ in range(max_new_tokens):
-            # 1. Get the predictions
-            logits, loss = self(idx)
+#     def generate(self, idx, max_new_tokens):
+#         # idx is (B, T) array of indices in the current context
+#         for _ in range(max_new_tokens):
+#             # 1. Get the predictions
+#             logits, loss = self(idx)
             
-            # 2. Focus only on the last time step
-            logits = logits[:, -1, :] # becomes (B, C)
+#             # 2. Focus only on the last time step
+#             logits = logits[:, -1, :] # becomes (B, C)
             
-            # 3. Apply softmax to get probabilities
-            probs = F.softmax(logits, dim=-1) # (B, C)
+#             # 3. Apply softmax to get probabilities
+#             probs = F.softmax(logits, dim=-1) # (B, C)
             
-            # 4. Sample from the distribution to get the next character
-            idx_next = torch.multinomial(probs, num_samples=1) # (B, 1)
+#             # 4. Sample from the distribution to get the next character
+#             idx_next = torch.multinomial(probs, num_samples=1) # (B, 1)
             
-            # 5. Append sampled index to the running sequence
-            idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
+#             # 5. Append sampled index to the running sequence
+#             idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
             
-        return idx
+#         return idx
 
 
-# ==========================================
-# PART 4: TESTING THE MODEL
-# ==========================================
+# # ==========================================
+# # PART 4: TESTING THE MODEL
+# # ==========================================
 
-# 1. Initialize the model
-m = BigramLanguageModel(vocab_size)
+# # 1. Initialize the model
+# m = BigramLanguageModel(vocab_size)
 
-# 2. Get a batch of data
-xb, yb = get_batch('train')
+# # 2. Get a batch of data
+# xb, yb = get_batch('train')
 
-# 3. Forward pass
-logits, loss = m(xb, yb)
+# # 3. Forward pass
+# logits, loss = m(xb, yb)
 
-print("--- MODEL INITIALIZATION ---")
-print(f"Logits shape: {logits.shape}")
-print(f"Initial loss (before training): {loss.item():.4f}\n")
+# print("--- MODEL INITIALIZATION ---")
+# print(f"Logits shape: {logits.shape}")
+# print(f"Initial loss (before training): {loss.item():.4f}\n")
 
-# 4. Generate untrained text
-print("--- UNTRAINED GENERATION (Should be random noise) ---")
-# Start with a 1x1 tensor holding a zero (often maps to a newline or space)
-context = torch.zeros((1, 1), dtype=torch.long)
-generated_tokens = m.generate(context, max_new_tokens=100)[0].tolist()
+# # 4. Generate untrained text
+# print("--- UNTRAINED GENERATION (Should be random noise) ---")
+# # Start with a 1x1 tensor holding a zero (often maps to a newline or space)
+# context = torch.zeros((1, 1), dtype=torch.long)
+# generated_tokens = m.generate(context, max_new_tokens=100)[0].tolist()
 
-print(decode(generated_tokens))
+# print(decode(generated_tokens))
