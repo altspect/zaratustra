@@ -75,15 +75,16 @@ n = int(0.9 * len(data)) # 90% for training, 10% for validation
 train_data = data[:n]
 val_data = data[n:]
 
-# Hyperparameters for data loading
+## Hyperparameters for data loading
+# Model is going to receive a table of numbers, and based on 8 previous is going to make another prediction
 block_size = 8   # Maximum context length for predictions
 batch_size = 4   # Number of independent sequences processed in parallel
 
 def get_batch(split):
-    # Select the correct dataset
+    # Select the correct dataset based on split argument - either train or val
     data_source = train_data if split == 'train' else val_data
     
-    # Generate random starting indices for our batch
+    # Generate 4 random starting indices for our batch, will produce something like [1045, 8321, 203, 5521]
     ix = torch.randint(len(data_source) - block_size, (batch_size,))
     
     # x is the input context, y is the target (shifted by 1 character)
@@ -92,77 +93,111 @@ def get_batch(split):
     return x, y
 
 
-# # ==========================================
-# # PART 3: BIGRAM LANGUAGE MODEL
-# # ==========================================
+# ==========================================
+# PART 3: BIGRAM LANGUAGE MODEL
+# ==========================================
 
-# class BigramLanguageModel(nn.Module):
-#     def __init__(self, vocab_size):
-#         super().__init__()
-#         # Lookup table reading logits for the next token directly
-#         self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
+class BigramLanguageModel(nn.Module):
+    def __init__(self, vocab_size):
+        super().__init__()
+        # Lookup table reading logits for the next token directly
+        self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
 
-#     def forward(self, idx, targets=None):
-#         # idx and targets are both (B, T) tensor of integers
-#         # B = Batch Size (4), T = Time/Block Size (8), C = Vocab Size (e.g., 65)
+    def forward(self, idx, targets=None):
+        # idx and targets are both (B, T) tensor of integers
+        # B = Batch Size (4), T = Time/Block Size (8), C = Vocab Size (e.g., 65)
         
-#         logits = self.token_embedding_table(idx) # Shape: (B, T, C)
+        logits = self.token_embedding_table(idx) # Shape: (B, T, C)
         
-#         if targets is None:
-#             loss = None
-#         else:
-#             # PyTorch expects dimensions to be (Batch * Time, Channels) for cross_entropy
-#             B, T, C = logits.shape
-#             logits = logits.view(B*T, C)
-#             targets = targets.view(B*T)
+        if targets is None:
+            loss = None
+        else:
+            # PyTorch expects dimensions to be (Batch * Time, Channels) for cross_entropy
+            B, T, C = logits.shape
+            logits = logits.view(B*T, C)
+            targets = targets.view(B*T)
             
-#             # Calculate cross-entropy loss (how wrong the predictions are)
-#             loss = F.cross_entropy(logits, targets)
+            # Calculate cross-entropy loss (how wrong the predictions are)
+            loss = F.cross_entropy(logits, targets)
             
-#         return logits, loss
+        return logits, loss
         
-#     def generate(self, idx, max_new_tokens):
-#         # idx is (B, T) array of indices in the current context
-#         for _ in range(max_new_tokens):
-#             # 1. Get the predictions
-#             logits, loss = self(idx)
+    def generate(self, idx, max_new_tokens):
+        # idx is (B, T) array of indices in the current context
+        for _ in range(max_new_tokens):
+            # 1. Get the predictions
+            logits, loss = self(idx)
             
-#             # 2. Focus only on the last time step
-#             logits = logits[:, -1, :] # becomes (B, C)
+            # 2. Focus only on the last time step
+            logits = logits[:, -1, :] # becomes (B, C)
             
-#             # 3. Apply softmax to get probabilities
-#             probs = F.softmax(logits, dim=-1) # (B, C)
+            # 3. Apply softmax to get probabilities
+            probs = F.softmax(logits, dim=-1) # (B, C)
             
-#             # 4. Sample from the distribution to get the next character
-#             idx_next = torch.multinomial(probs, num_samples=1) # (B, 1)
+            # 4. Sample from the distribution to get the next character
+            idx_next = torch.multinomial(probs, num_samples=1) # (B, 1)
             
-#             # 5. Append sampled index to the running sequence
-#             idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
+            # 5. Append sampled index to the running sequence
+            idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
             
-#         return idx
+        return idx
 
 
 # # ==========================================
 # # PART 4: TESTING THE MODEL
 # # ==========================================
 
-# # 1. Initialize the model
-# m = BigramLanguageModel(vocab_size)
+# 1. Initialize the model
+m = BigramLanguageModel(vocab_size)
 
-# # 2. Get a batch of data
-# xb, yb = get_batch('train')
+# 2. Get a batch of data
+xb, yb = get_batch('train')
 
-# # 3. Forward pass
-# logits, loss = m(xb, yb)
+# 3. Forward pass
+logits, loss = m(xb, yb)
 
-# print("--- MODEL INITIALIZATION ---")
-# print(f"Logits shape: {logits.shape}")
-# print(f"Initial loss (before training): {loss.item():.4f}\n")
+print("--- MODEL INITIALIZATION ---")
+print(f"Logits shape: {logits.shape}")
+print(f"Initial loss (before training): {loss.item():.4f}\n")
 
-# # 4. Generate untrained text
-# print("--- UNTRAINED GENERATION (Should be random noise) ---")
-# # Start with a 1x1 tensor holding a zero (often maps to a newline or space)
-# context = torch.zeros((1, 1), dtype=torch.long)
-# generated_tokens = m.generate(context, max_new_tokens=100)[0].tolist()
+# 4. Generate untrained text
+print("--- UNTRAINED GENERATION (Should be random noise) ---")
+# Start with a 1x1 tensor holding a zero (often maps to a newline or space)
+context = torch.zeros((1, 1), dtype=torch.long)
+generated_tokens = m.generate(context, max_new_tokens=100)[0].tolist()
 
-# print(decode(generated_tokens))
+print(decode(generated_tokens))
+
+# ==========================================
+# PART 5: TRAINING (Filling in our lookup table!)
+# ==========================================
+
+# Optimizer that will adjust the weights in the lookup table
+optimizer = torch.optim.AdamW(m.parameters(), lr=1e-2)
+
+batch_size = 32
+steps = 10000
+
+print(f"--- STARTING TRAINING ({steps} steps) ---")
+for step in range(steps):
+    # 1. Sample a batch of data
+    xb, yb = get_batch('train')
+
+    # 2. Evaluate the loss
+    logits, loss = m(xb, yb)
+
+    # 3. Update the weights in the matrix
+    optimizer.zero_grad(set_to_none=True)
+    loss.backward()
+    optimizer.step()
+
+    # Print progress every 1000 steps
+    if step % 1000 == 0 or step == steps - 1:
+        print(f"Step {step:5d} | Loss: {loss.item():.4f}")
+
+# ==========================================
+# PART 6: POST-TRAINING GENERATION
+# ==========================================
+print("\n--- GENERATION AFTER TRAINING ---")
+context = torch.zeros((1, 1), dtype=torch.long)
+print(decode(m.generate(context, max_new_tokens=400)[0].tolist()))
